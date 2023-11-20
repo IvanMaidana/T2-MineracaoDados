@@ -76,6 +76,7 @@ toNumeric <- function(x){
 
 # Converter os valores em string para valores numéricos
 data1[, 3:ncol(data1)] <- apply(data1[, 3:ncol(data1)], MARGIN = c(1,2), toNumeric)
+data1$QUANT..ATIVOS <- data1$QUANT..ATIVOS * 100
 
 # Crie um histograma com base nos dados da coluna "P.VP"
 ggplot(data1, aes(x = P.VP)) +
