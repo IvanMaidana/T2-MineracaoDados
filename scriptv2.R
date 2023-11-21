@@ -3,21 +3,27 @@
 
 # Carregue as bibliotecas necessárias
 library(caret)
-library(caretEnsemble)
 
 # Carregue o conjunto de dados
 raw_data <- read.csv("http://www-usr.inf.ufsm.br/~joaquim/UFSM/DM/TF_2023%20-%20FII.csv")
 fii_data <- raw_data
 
+# Função que converte valores em string para numérico
 format_to_numeric <- function(x){
   as.numeric(gsub(",", "", gsub("\\.", "", gsub("\\s", "", gsub("%", "", x)))))/100
 }
+# Converte todos "N/A" em NA
 fii_data <- mutate_all(fii_data, function(x) ifelse(x == "N/A", NA, x))
+# Converte todos os campos a partir da 3ª coluna para numérico
 fii_data[, 3:ncol(fii_data)] <- apply(fii_data[, 3:ncol(fii_data)], MARGIN = c(1,2), format_to_numeric)
+# Conserta a conversão dos campos inteiros
 fii_data$QUANT..ATIVOS <- as.integer(fii_data$QUANT..ATIVOS * 100)
 fii_data$NUM..COTISTAS <- as.integer(fii_data$NUM..COTISTAS * 100)
+# Substitui "?" por NA
 fii_data$TIPO[fii_data$TIPO == "?"] <- NA
+# Transforma tipo em um factor
 fii_data <- fii_data %>% mutate_if(is.character, as.factor)
+# Remove as 3 últimas colunas, pois possuem apenas valores NA
 fii_data = fii_data[, -c(19, 20, 21)]
 
 # Explore os dados
@@ -27,25 +33,28 @@ sapply(fii_data, function(x) sum(is.na(x)))  # Checa valores faltantes
 
 # Visualiza caracteristicas
 # Exemplo: Matriz scatterplot para as variáveis selecionadas
-selected_vars <- c("P.VP", "DIVIDEND.YIELD", "DY..12M..ACUMULADO", "VARIAÇÃO.PREÇO", "QUANT..ATIVOS", "NUM..COTISTAS", "VOLATILIDADE")
-pairs(~P.VP + DIVIDEND.YIELD + DY..12M..ACUMULADO + VARIAÇÃO.PREÇO + QUANT..ATIVOS + NUM..COTISTAS + VOLATILIDADE, data = fii_data, col=fii_data$TIPO, pch=16)
+pairs(~P.VP + DY..12M..MÉDIA + QUANT..ATIVOS + NUM..COTISTAS + VARIAÇÃO.PATRIMONIAL, data = fii_data, col=fii_data$TIPO, pch=16)
+
+# Plota a frequência de cada tipo
+fii_data %>% 
+  ggplot(aes(x = TIPO)) + 
+  geom_bar(fill = "blue", color = "black", alpha = 0.7) + 
+  labs(title = "Frequência de cada TIPO", x = "TIPO", y = "Frequency")
+
 
 ## PRÉ PROCESSAMENTO
 
-# Handling Missing Values
-# Exclude the first two columns from imputation
-columns_to_impute <- colnames(fii_data)[3:ncol(fii_data)]
+# Lidando com valores faltantes
+# Exclui as 2 primeiras colunas da checagem
+colunas <- colnames(fii_data)[3:ncol(fii_data)]
 
-# Impute missing values with the mean for each "TIPO"
+# Substitui os valores faltantes de um tipo com a média do tipo para o valor.
 fii_data_imputed <- fii_data %>%
   group_by(TIPO) %>%
-  mutate(across(all_of(columns_to_impute), ~ifelse(is.na(.), mean(., na.rm = TRUE), .))) %>%
+  mutate(across(all_of(colunas), ~ifelse(is.na(.), mean(., na.rm = TRUE), .))) %>%
   ungroup()
 
-# Identify columns for outlier treatment
-columns_to_treat_outliers <- colnames(fii_data)[3:ncol(fii_data)]
-
-# Function to treat outliers within each group
+# Função para tratar outliers de cada grupo
 treat_outliers_within_group <- function(df, column) {
   df %>%
     group_by(TIPO) %>%
@@ -60,24 +69,13 @@ treat_outliers_within_group <- function(df, column) {
     ungroup()
 }
 
-# Treat outliers within each group
+# Trata outliers para cada grupo
 fii_data_outliers_treated <- fii_data_imputed
-#for (col in columns_to_treat_outliers) {
-#  fii_data_outliers_treated <- treat_outliers_within_group(fii_data_outliers_treated, col)
-#}
-
-# CLASSIFICAÇÃO
+for (col in colunas) {
+  fii_data_outliers_treated <- treat_outliers_within_group(fii_data_outliers_treated, col)
+}
 
 fii_data <- fii_data_outliers_treated
-
-# Visualiza caracteristicas
-# Exemplo: Matriz scatterplot para as variáveis selecionadas
-selected_vars <- c("P.VP", "DIVIDEND.YIELD", "DY..12M..ACUMULADO", "VARIAÇÃO.PREÇO", "QUANT..ATIVOS", "NUM..COTISTAS", "VOLATILIDADE")
-pairs(~P.VP + DIVIDEND.YIELD + DY..12M..ACUMULADO + VARIAÇÃO.PREÇO + QUANT..ATIVOS + NUM..COTISTAS + VOLATILIDADE, data = fii_data, col=fii_data$TIPO, pch=16)
-
-# Carrega as bibliotecas necessárias para o modelo de classificação
-library(caret)
-library(randomForest)
 
 # Identifica as observações cujos tipos ainda são desconhecidos
 unknown_assets <- fii_data[is.na(fii_data$TIPO), ]
@@ -89,9 +87,19 @@ fii_data <- bind_rows(fii_data, shopping_rows)
 shopping_rows <- filter(fii_data, TIPO == "MISTO")
 fii_data <- bind_rows(fii_data, shopping_rows)
 
+# Visualiza caracteristicas
+# Exemplo: Matriz scatterplot para as variáveis selecionadas
+pairs(~P.VP + DY..12M..MÉDIA + QUANT..ATIVOS + NUM..COTISTAS + VARIAÇÃO.PATRIMONIAL, data = fii_data, col=fii_data$TIPO, pch=16)
+
+
+## CLASSIFICAÇÃO
+# Carrega as bibliotecas necessárias para o modelo de classificação
+library(caret)
+library(randomForest)
+
 # Seleciona as colunas relevantes para o modelo de classificação
 model_data <- fii_data %>%
-  select(TIPO, P.VP, `DY..12M..ACUMULADO`, QUANT..ATIVOS, NUM..COTISTAS, PREÇO.ATUAL..R.., PATRIMÔNIO.LÍQUIDO, VARIAÇÃO.PREÇO, DY.PATRIMONIAL, VARIAÇÃO.PATRIMONIAL, VOLATILIDADE)
+  select(TIPO, P.VP, DY..12M..MÉDIA,  QUANT..ATIVOS, NUM..COTISTAS, PREÇO.ATUAL..R.., PATRIMÔNIO.LÍQUIDO, VARIAÇÃO.PREÇO, DY.PATRIMONIAL, VARIAÇÃO.PATRIMONIAL, VOLATILIDADE)
 
 # Divide os dados em conjuntos de treino e de teste
 set.seed(100)
@@ -128,12 +136,7 @@ plot(var_importance)
 # Salvar o modelo de treinamento (opcional)
 saveRDS(model, "fii_classification_model.rds")
 
-## PREDICTIONS
+## Predições
 
 predictions_unknown <- predict(model, newdata = unknown_assets)
 print(predictions_unknown)
-
-# Check the data after handling missing values
-#str(fii_data)  # Checa a estrutura do dataset
-#summary(fii_data)  # Estatísticas resumidas do dataset
-#sapply(fii_data, function(x) sum(is.na(x)))  # Checa valores faltantes
