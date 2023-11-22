@@ -348,6 +348,16 @@ matriz_confusao = table(test_data$TIPO , previsoes)
 confusionMatrix(matriz_confusao)
 ```
 
+Também pode se criar um rpart diferente, usando-se o method class, epsecializado em localizar os tipos:
+```R
+modelo_Rpart <- rpart(TIPO ~ P.VP + DY..12M..MÉDIA + QUANT..ATIVOS + NUM..COTISTAS, data=train_data, method = "class")
+summary(modelo_Rpart)
+previsoes <- predict(modelo_Rpart, test_data)
+plot(modelo_Rpart)
+predict(modelo_Rpart, data3)
+#Resultado: Papel, papel, tijolo e tijolo
+```
+
 # Resultados
 
 Resultado da matriz de confusão do modelo sobre o conjunto de testes:
