@@ -1,8 +1,18 @@
 # Instale as bibliotecas necessárias
 # install.packages("tidyverse")
-
-# Carregue as bibliotecas necessárias
+#install.packages("rpart")
+#install.packages("rpart.plot")
+#install.packages("caret")
+#install.packages("e1071")
+# Carregar o pacote para criar o modelo da arvore
+library(randomForest)
+library(rpart)
+library(rpart.plot)
 library(caret)
+#carrega o pacote para verificar accuracy
+library(e1071)
+library(caret)
+
 
 # Carregue o conjunto de dados
 raw_data <- read.csv("http://www-usr.inf.ufsm.br/~joaquim/UFSM/DM/TF_2023%20-%20FII.csv")
@@ -118,9 +128,7 @@ print(grafico)
 
 #######################CRIACAO DE ARVORE#######################################################
 ##########CLASSIFICAÇÃO USANDO RANDOM FOREST####################################################
-# Carrega as bibliotecas necessárias para o modelo de classificação
-library(caret)
-library(randomForest)
+
 
 # Seleciona as colunas relevantes para o modelo de classificação
 model_data <- fii_data %>%
@@ -170,18 +178,6 @@ print(predictions_unknown)
 
 
 ###############CLASSIFICAÇÃO  USANDO O PACKAGE RPART######################################################
-#install.packages("rpart")
-#install.packages("rpart.plot")
-#install.packages("caret")
-#install.packages("e1071")
-# Carregar o pacote para criar o modelo da arvore
-library(rpart)
-#carrega o pacote que plota a arvore de forma mais vizual
-library(rpart.plot)
-library(caret)
-#carrega o pacote para verificar accuracy
-library(e1071)
-
 
 # Seleciona as colunas relevantes para o modelo de classificação
 model_data <- fii_data %>%
