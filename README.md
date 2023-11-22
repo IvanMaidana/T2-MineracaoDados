@@ -1,7 +1,10 @@
 **Universidade Federal de Santa Maria
 ELC1080 - Mineração de Dados - 2023/2**
+
 **Professor:** Joaquim V. C. Assunção
+
 **Alunos:** Ivan Maidana, Matheus de Almeida, Miguel
+
 # Introdução
 
 Neste trabalho, iremos utilizar um dataset de Fundos de Investimentos Imobiliários (FII) brasileiro. Esse dataset, possui as seguintes colunas:
