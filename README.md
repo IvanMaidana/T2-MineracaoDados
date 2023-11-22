@@ -1,3 +1,7 @@
+**Universidade Federal de Santa Maria
+ELC1080 - Mineração de Dados - 2023/2**
+**Professor:** Joaquim V. C. Assunção
+**Alunos:** Ivan Maidana, Matheus de Almeida, Miguel
 # Introdução
 
 Neste trabalho, iremos utilizar um dataset de Fundos de Investimentos Imobiliários (FII) brasileiro. Esse dataset, possui as seguintes colunas:
@@ -38,7 +42,7 @@ raw_data <- read.csv("http://www-usr.inf.ufsm.br/~joaquim/UFSM/DM/TF_2023%20-%20
 
 O dataset bruto recém carregado possui a seguinte aparência:
 
-![[Pasted image 20231121181710.png]]
+![[Image1.png]]
 
 
 ### Conversão dos dados
@@ -83,7 +87,7 @@ fii_data = fii_data[, -c(19, 20, 21)]
 
 Por fim, nosso dataset `fii_data` fica representado da seguinte forma:
 
-![[Pasted image 20231121183210.png]]
+![[Image2.png]]
 
 ### Estatísticas
 
@@ -114,7 +118,7 @@ fii_data %>%
 
 ![[Pasted image 20231121191751.png]]
 
-Isso demonstra uma quantidade muito superior de observações do `TIPO` `TIJOLO` dentro do dataset. Em segundo, temos observações do `TIPO` `PAPEL`. Isso demonstra que temos um conjunto desbalanceado, ou seja, não possuímos o mesmo número de observações para cada `TIPO`. Nestes casos, podemos recorrer a um resampling: aumento das instâncias de um `TIPO` minoritário, ou a diminuição das instâncias majoritárias. Também podemos utilizar classificadores que lidem bem com datasets desbalanceados, tais como *Random Forest*, que cria múltiplas *Decison Trees* e combina as suas predições, além do *Gradient Boosting*. O classificador escolhido para este trabalho, foi o *Random Forest* - também optamos por um oversampling de classes que estavam sendo difíceis de atingir uma precisão satisfatória durante a construção do classificador.
+Isso demonstra uma quantidade muito superior de observações do `TIPO` `TIJOLO` dentro do dataset. Em segundo, temos observações do `TIPO` `PAPEL`. Isso demonstra que temos um conjunto desbalanceado, ou seja, não possuímos o mesmo número de observações para cada `TIPO`. Nestes casos, podemos recorrer a um resampling: aumento das instâncias de um `TIPO` minoritário, ou a diminuição das instâncias majoritárias. Também podemos utilizar classificadores que lidem bem com datasets desbalanceados, tais como *Random Forest*, que cria múltiplas *Decision Trees* e combina as suas predições, além do *Gradient Boosting*. O classificador escolhido para este trabalho, foi o *Random Forest* - também optamos por um oversampling de classes que estavam sendo difíceis de atingir uma precisão satisfatória durante a construção do classificador.
 
 Podemos também encontrar histogramas para quaisquer colunas, utilizando o script abaixo:
 
@@ -143,14 +147,142 @@ Podemos encontrar uma matriz scatterplot para as variáveis que considerarmos im
 Ao plotarmos os gráficos com os dados praticamente brutos, onde apenas foram realizadas as conversões de tipagem de dados dentro do dataset, podemos observar que os padrões estão dificilmente reconhecíveis e há a presença de outliers, valores muito distantes dos demais que possivelmente trariam problemas para classificação. Os motivos para a falta de um padrão observável nestes dados podem ser resumido à uma grande quantidade de dados faltantes (`NA`) e à uma grande quantidade de outliers: precisamos tratar esses problemas durante a fase de pré-processamento.
 # Pré-processamento dos dados
 
+Precisamos realizar o pré-processamento para facilitar o encontro de padrões dentro dos nossos dados. Para isso, teremos duas abordagens: primeiramente, lidaremos com dados faltantes e, posteriormente, lidaremos com dados outliers.
 ### Lidando com os dados faltantes
 
+Podemos lidar com os dados faltantes substituindo-os pela média do `TIPO` para o valor. Utilizamos o seguinte script para realizar isso:
+
+```R
+# Exclui as 2 primeiras colunas da checagem
+colunas <- colnames(fii_data)[3:ncol(fii_data)]
+
+# Substitui os valores faltantes de um tipo com a média do tipo para o valor.
+fii_data_imputed <- fii_data %>%
+  group_by(TIPO) %>%
+  mutate(across(all_of(colunas), ~ifelse(is.na(.), mean(., na.rm = TRUE), .))) %>%
+  ungroup()
+```
+
+Nesse script, a função `group_by` é utilizada para agrupar o dataset pela coluna `TIPO`. Isso significa que cada operação subsequente será realizada separadamente a cada grupo definido pelos valores únicos de `TIPO`. Já a função `mutate` aplica uma transformação em todas colunas especificadas pelo vetor `colunas`. Para cada coluna, checa se o valor é `NA`, caso seja, substitui o valor com a média da coluna.
 ### Lidando com outliers
 
+Podemos lidar com os dados outliers de maneira similar, substituindo-os pela mediana do `TIPO` para o valor. O seguinte script foi utilizado:
+
+```R
+# Função para tratar outliers de cada grupo
+treat_outliers_within_group <- function(df, column) {
+  df %>%
+    group_by(TIPO) %>%
+    mutate(
+      across(all_of(column), function(x) {
+        qnt <- quantile(x, c(0.25, 0.75), na.rm = TRUE)
+        lower <- qnt[1] - 1.5 * IQR(x, na.rm = TRUE)
+        upper <- qnt[2] + 1.5 * IQR(x, na.rm = TRUE)
+        replace(x, x < lower | x > upper, median(x, na.rm = TRUE))
+      })
+    ) %>%
+    ungroup()
+}
+
+# Trata outliers para cada grupo
+fii_data_outliers_treated <- fii_data_imputed
+for (col in colunas) {
+  fii_data_outliers_treated <- treat_outliers_within_group(fii_data_outliers_treated, col)
+}
+
+fii_data <- fii_data_outliers_treated
+```
+
+Neste script, a função `treat_outliers_within_group` calcula um limite inferior e um limite superior para cada coluna baseado no intervalo interquartil (`IQR`) e substituí os valores fora deste intervalo pela mediana da coluna em cada grupo. Posteriormente, o script usa um loop para iterar cada uma das colunas especificadas em `colunas`. O resultado é armazenado em `fii_data` após o final do loop.
+
+### Toques finais
+
+Para a finalização do pré-processamento, vamos remover do dataset as linhas cujo `TIPO` ainda é desconhecido (`NA`). Estes serão armazenados em um novo dataframe. Além disso, duplicaremos instâncias do tipo `SHOPPING` e `MISTO`, pois a taxa de precisão em testes anteriores para as tais estava muito baixa.
+
+```R
+# Identifica as observações cujos tipos ainda são desconhecidos
+unknown_assets <- fii_data[is.na(fii_data$TIPO), ]
+fii_data <- na.omit(fii_data)
+
+# Duplica instâncias do tipo SHOPPING
+shopping_rows <- filter(fii_data, TIPO == "SHOPPING")
+fii_data <- bind_rows(fii_data, shopping_rows)
+
+# Duplica instâncias do tipo MISTO
+shopping_rows <- filter(fii_data, TIPO == "MISTO")
+fii_data <- bind_rows(fii_data, shopping_rows)
+```
+### Visualizando os dados pós-processados
+
+Podemos visualizar o scatterplot dos dados da mesma maneira que fizemos anteriormente:
+
+![[Pasted image 20231121201742.png]]
+
+Agora, podemos observar que os dados aparentam pertencer a padrões reconhecíveis por uma máquina, além de estarem muito menos esparsos. Esses dados serão separados em conjuntos de treino e de testes e jogados para um modelo de classificação.
 # Modelo de classificação
 
-### RandomForest
+Para o nosso modelo de classificação, será utilizado um modelo de *Random Forest*, as colunas que serão utilizadas na construção desse modelo serão `TIPO`, que servirá como label, e atributos como : `P.VP`, `DY..12M..MEDIA`, `QUANT..ATIVOS`, `NUM..COTISTAS`, `PREÇO.ATUAL..R..`, `PATRIMÔNIO.LÍQUIDO`, `VARIAÇÃO.PŔEÇO`, `DY.PATRIMONIAL`, `VARIAÇÃO.PATRIMONIAL` e `VOLATILIDADE`.
 
+### Conjuntos de treino e de testes
+
+Nosso dataset será dividido em um conjunto de treino e um conjunto de testes: 80% das instâncias irão para o conjunto de treino, enquanto os restantes 20% irão para o conjunto de testes. O treinamento utilizará um controle de *cross-validation* de 8 folds: dessa maneira, o modelo será treinado 8 vezes, cada vez utilizando 8-1 folds para treinamento e o fold restante para validação. *Cross-validation* reduz a variança, maximiza o uso da informação disponível e avalia quão bem um modelo generaliza para dados novos e não vistos.
+
+```R
+# Seleciona as colunas relevantes para o modelo de classificação
+model_data <- fii_data %>%
+  select(TIPO, P.VP, DY..12M..MÉDIA,  QUANT..ATIVOS, NUM..COTISTAS, PREÇO.ATUAL..R.., PATRIMÔNIO.LÍQUIDO, VARIAÇÃO.PREÇO, DY.PATRIMONIAL, VARIAÇÃO.PATRIMONIAL, VOLATILIDADE)
+
+# Divide os dados em conjuntos de treino e de teste
+set.seed(100)
+train_index <- createDataPartition(model_data$TIPO, p = 0.8, list = FALSE)
+train_data <- model_data[train_index, ]
+test_data <- model_data[-train_index, ]
+
+# Define o controle da validação cruzada
+cv_control <- trainControl(method = "cv", number = 8)  # 8-fold cross validation
+```
+### Random Forest
+
+Foi utilizado um modelo *Random Forest*, que cria múltiplas *Decision Trees* e combina as suas predições.
+
+```R
+# Treina o modelo de Random Forest utilizando validação cruzada
+model <- train(
+  TIPO ~ .,
+  data = train_data,
+  method = "rf",  # Random Forest
+  trControl = cv_control
+)
+```
+
+Posteriormente, são realizadas as predições, a avaliação do modelo através da matriz de confusão e o armazenamento da importância de cada variável dentro do modelo:
+
+```R
+# Realizar predições no dataset de treino
+predictions <- predict(model, newdata = test_data)
+
+# Avaliar o modelo, printar
+confusion_matrix <- confusionMatrix(predictions, test_data$TIPO)
+
+# Plotar a importância de cada variável no modelo
+var_importance <- varImp(model)
+```
 # Resultados
 
-# Conclusão
+Resultado da matriz de confusão do modelo sobre o conjunto de testes:
+
+![[Pasted image 20231121205249.png]]
+
+O modelo alcançou uma acurácia de 93% para o conjunto de testes, dados estes que não foram vistos pelo modelo em nenhum momento. Isso demonstra uma alta capacidade de generalização do modelo.
+
+O plot da importância de cada variável para a classificação dentro do modelo também foi realizado, sendo os valores respectivos apresentados abaixo:
+
+![[Pasted image 20231121205446.png]]
+
+![[Pasted image 20231121205551.png]]
+
+Além disso, foi realizada a predição para cada uma das instâncias em que `TIPO` estava com valores `NA`:
+
+![[Pasted image 20231121205728.png]]
+
+As últimas 5 predições correspondem às predições requisitadas no enunciado do trabalho. O método de classificação proposto encontrou: `TIJOLO`, `PAPEL`, `PAPEL`, `TIJOLO` e `PAPEL`.
