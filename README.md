@@ -118,7 +118,7 @@ fii_data %>%
 
 ![[Pasted image 20231121191751.png]]
 
-Isso demonstra uma quantidade muito superior de observações do `TIPO` `TIJOLO` dentro do dataset. Em segundo, temos observações do `TIPO` `PAPEL`. Isso demonstra que temos um conjunto desbalanceado, ou seja, não possuímos o mesmo número de observações para cada `TIPO`. Nestes casos, podemos recorrer a um resampling: aumento das instâncias de um `TIPO` minoritário, ou a diminuição das instâncias majoritárias. Também podemos utilizar classificadores que lidem bem com datasets desbalanceados, tais como *Random Forest*, que cria múltiplas *Decision Trees* e combina as suas predições, além do *Gradient Boosting*. O classificador escolhido para este trabalho, foi o *Random Forest* - também optamos por um oversampling de classes que estavam sendo difíceis de atingir uma precisão satisfatória durante a construção do classificador.
+Isso demonstra uma quantidade muito superior de observações do `TIPO` `TIJOLO` dentro do dataset. Em segundo, temos observações do `TIPO` `PAPEL`. Isso demonstra que temos um conjunto desbalanceado, ou seja, não possuímos o mesmo número de observações para cada `TIPO`. Nestes casos, podemos recorrer a um resampling: aumento das instâncias de um `TIPO` minoritário, ou a diminuição das instâncias majoritárias. Também podemos utilizar classificadores que lidem bem com datasets desbalanceados, tais como *Random Forest*, que cria múltiplas *Decision Trees* e combina as suas predições, além do *Gradient Boosting*. O classificador escolhido para este trabalho, foi o *Random Forest*, e para constrastalo também implementamos um modelo com a biblioteca *rpart* - também optamos por um oversampling de classes que estavam sendo difíceis de atingir uma precisão satisfatória durante a construção do classificador.
 
 Podemos também encontrar histogramas para quaisquer colunas, utilizando o script abaixo:
 
@@ -145,6 +145,36 @@ Podemos encontrar uma matriz scatterplot para as variáveis que considerarmos im
 ![[Pasted image 20231121185711.png]]
 
 Ao plotarmos os gráficos com os dados praticamente brutos, onde apenas foram realizadas as conversões de tipagem de dados dentro do dataset, podemos observar que os padrões estão dificilmente reconhecíveis e há a presença de outliers, valores muito distantes dos demais que possivelmente trariam problemas para classificação. Os motivos para a falta de um padrão observável nestes dados podem ser resumido à uma grande quantidade de dados faltantes (`NA`) e à uma grande quantidade de outliers: precisamos tratar esses problemas durante a fase de pré-processamento.
+
+Podemos também encontrar padrões ao correlacionar colunas como por exemplo:
+```R
+# Criar o gráfico de barras relação entre cotistas e o tipo do fundo de investimento
+grafico <- ggplot(fii_data, aes(x = TIPO, y = NUM..COTISTAS, fill = TIPO)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Relação entre Tipo de Investimento e Número de Cotistas", x = "Tipo de Investimento", y = "Número de Cotistas") +
+  theme_minimal()
+# Exibir o gráfico
+print(grafico)
+```
+
+![certo](https://github.com/IvanMaidana/T2-MineracaoDados/assets/75757584/f360d999-965b-4a7c-ac0e-520b99257276)
+
+Neste caso, podemos ver a relação do número de cotistas em relação a cada fundo, o que mostra que os fundos de papel, são os que possuem os maiores números de cotistas, enquanto os fundos de desenvolvimento e shopping quase não possuem cotistas, e os fundos de tijolo e misto possuem um número razoável de cotistas.
+
+```R
+# Criar o gráfico de barras relação entre Quantidade de ativos e o tipo do fundo de investimento
+grafico <- ggplot(fii_data, aes(x = TIPO, y = QUANT..ATIVOS, fill = TIPO)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Relação entre Tipo de Investimento quantidade de Ativos", x = "Tipo de Investimento", y = "Quantidade de Ativos") +
+  theme_minimal()
+# Exibir o gráfico
+print(grafico)
+```
+![certo2](https://github.com/IvanMaidana/T2-MineracaoDados/assets/75757584/5b513674-3b6f-4408-9074-4db1f5a05898)
+
+Podemos observar que o fundo do tipo tijolo é o que possui a imensa maioria de investimento ativos, enquanto os demais possuem uma quantidade bem baixa, e o fundo do tipo papel possui um total de zero investimentos ativos.
+
+
 # Pré-processamento dos dados
 
 Precisamos realizar o pré-processamento para facilitar o encontro de padrões dentro dos nossos dados. Para isso, teremos duas abordagens: primeiramente, lidaremos com dados faltantes e, posteriormente, lidaremos com dados outliers.
@@ -286,3 +316,52 @@ Além disso, foi realizada a predição para cada uma das instâncias em que `TI
 ![[Pasted image 20231121205728.png]]
 
 As últimas 5 predições correspondem às predições requisitadas no enunciado do trabalho. O método de classificação proposto encontrou: `TIJOLO`, `PAPEL`, `PAPEL`, `TIJOLO` e `PAPEL`.
+
+
+### Rpart
+
+Foi utilizado um modelo com o pacote *rpart*, que cria uma árvore de decisão com uma expressão de entrada e a base de dados que utilizaremos para criar o modelo. Foi utilizados os mesmos dados,
+que no modelo de *random florest*, separando em dados de treino e dados de teste.
+
+```R
+# Define o controle da validação cruzada
+cv_control <- rpart.control(cp = 0.01, minsplit = 5, xval = 10)
+
+# Treina o modelo de Árvore de Decisão com validação cruzada
+modelo_arvore <- rpart(
+  formula = TIPO ~.,
+  data = train_data,
+  control = cv_control
+)
+```
+
+Posteriormente, são realizadas as predições em cima dos dados de teste, e a avaliação do modelo através da matriz de confusão:
+```R
+# Realiza predições nos dados de teste
+previsoes <- predict(modelo_arvore, newdata = test_data[-1], type = 'class')
+# Cria a matriz de confusão
+matriz_confusao = table(test_data$TIPO , previsoes)
+# Exibe a matriz de confusão
+confusionMatrix(matriz_confusao)
+```
+
+# Resultados
+
+Resultado da matriz de confusão do modelo sobre o conjunto de testes:
+
+![modelo_rpart](https://github.com/IvanMaidana/T2-MineracaoDados/assets/75757584/52eb9303-4984-4bae-bb95-1c0670a6acfe)
+
+
+O modelo alcançou uma acurácia de 85% para o conjunto de testes, dados estes que não foram vistos pelo modelo em nenhum momento. Isso demonstra uma boa capacidade de generalização do modelo.
+
+O plot da importância de cada variável para a classificação dentro do modelo também foi realizado, sendo os valores respectivos apresentados abaixo:
+
+![importancia_dados](https://github.com/IvanMaidana/T2-MineracaoDados/assets/75757584/1df7e5a2-4ec8-47be-b83e-3cdec75118b6)
+
+
+Além disso, foi realizada a predição para cada uma das 5 instâncias em que `TIPO` estava com valores `?`:
+
+![prediçoes_finais](https://github.com/IvanMaidana/T2-MineracaoDados/assets/75757584/0d8426b3-bc55-4060-a4b7-7eab6105d1d8)
+
+O método de classificação proposto encontrou: `TIJOLO`, `PAPEL`, `PAPEL`, `PAPEL` e `PAPEL`.
+
